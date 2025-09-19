@@ -1,0 +1,105 @@
+name: YiControl Project GitHub Actions Demo
+run-name: ${{ github.actor }} is Project out GitHub Actions 🚀
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+jobs:
+  Explore-GitHub-Actions:
+    runs-on: self-hosted
+    container:
+      image: rainbow12/x1_build:1.0.0
+      options: "--privileged -v /dev:/dev"
+    steps:
+    - name: install esp_tools
+      run: |
+        apt-get update 
+        apt-get install -y python3 python3-pip python3-venv just lftp
+        pip3 install --upgrade esptool --break-system-packages
+    
+
+    - name: Clone Gitea repo
+      run: |
+        cd /home
+        git clone https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/YiControl.git
+        git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_rust_util.git
+        git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_base_util.git  
+
+    - name: Debug repo status
+      run: |
+        cd /home
+        mkdir -p YiControl/components
+        cp -r x1_rust_util YiControl/components/
+        cp -r x1_base_util YiControl/components/
+        cd /home/YiControl/components/x1_rust_util
+        just build_esp
+
+    - name: edit Project Env
+      shell: sh -e {0}
+      env:
+        IDF_TARGET: esp32s3
+        SDKCONFIG_DEFAULTS: sdkconfig.ci
+        FTP_USER: ${{ secrets.FTP_USER }}
+        FTP_PASS: ${{ secrets.FTP_PASS }}
+        FTP_HOST: ${{ secrets.FTP_HOST }}
+      run: |
+        cd /home/YiControl
+        . /home/esp-idf/export.sh
+        mkdir -p /home/YiControl/build
+        wget -r -nH --cut-dirs=4 -P /home/YiControl/build/ ftp://$FTP_USER:$FTP_PASS@$FTP_HOST/AiYiJan/YiControlStaticBin/Static/bin
+        idf.py build
+
+
+
+
+    - name: flash Project
+      run: |
+        cd /home/YiControl
+        . /home/esp-idf/export.sh
+        esptool --chip esp32s3  erase_flash
+        esptool --chip esp32s3 -b 460800 write_flash 0x420000 /home/YiControl/build/resources.bin
+        idf.py flash
+
+
+    - name: mv Project bin file
+      run: |
+        mkdir -p /home/YiControlProjectBin
+        cp /home/YiControl/build/bootloader/bootloader.bin /home/YiControlProjectBin/
+        cp /home/YiControl/build/partition_table/partition-table.bin /home/YiControlProjectBin/
+        cp /home/YiControl/build/ota_data_initial.bin /home/YiControlProjectBin/
+        cp /home/YiControl/build/YiControl_*.bin /home/YiControlProjectBin/
+        cp /home/YiControl/build/storage.bin /home/YiControlProjectBin/
+        cp /home/YiControl/build/resources.bin /home/YiControlProjectBin/
+
+    - name: Upload bin files to FTP server
+      env:
+        FTP_USER: ${{ secrets.FTP_USER }}
+        FTP_PASS: ${{ secrets.FTP_PASS }}
+        FTP_HOST: ${{ secrets.FTP_HOST }}
+      run: |
+
+        cd /home
+        
+        # 提取版本号和生成日期时间
+        VERSION=$(ls /home/YiControlProjectBin/YiControl_*.bin | head -1 | sed 's/.*YiControl_\(.*\)\.bin/\1/')
+        DATETIME=$(date +%m%d%H%M)
+        NEW_FOLDER_NAME="${VERSION}_${DATETIME}"
+        
+        # 重命名文件夹
+        mv YiControlProjectBin "$NEW_FOLDER_NAME"
+        ls -la "$NEW_FOLDER_NAME"
+        
+        # 上传整个文件夹到FTP服务器
+        lftp -c "
+          set ftp:ssl-allow no;
+          open -u $FTP_USER,$FTP_PASS $FTP_HOST;
+          mkdir -p AiYiJan/YiControlProjectBin;
+          cd AiYiJan/YiControlProjectBin;
+          mirror -R $NEW_FOLDER_NAME $NEW_FOLDER_NAME;
+          quit
+        "
+    
+
+    
+    
