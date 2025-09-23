@@ -9,15 +9,14 @@ jobs:
   Explore-GitHub-Actions:
     runs-on: self-hosted
     container:
-      image: rainbow12/x1_build:1.0.0
+      image: x1_new_build:latest
       options: "--privileged -v /dev:/dev"
     steps:
-    - name: install esp_tools
+    - name: Install Node (for act)
       run: |
-        apt-get update 
-        apt-get install -y python3 python3-pip python3-venv just lftp
-        pip3 install --upgrade esptool --break-system-packages
-    
+        apt-get update && apt-get install -y nodejs npm
+
+
 
     - name: Clone Gitea repo
       run: |
@@ -26,14 +25,41 @@ jobs:
         git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_rust_util.git
         git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_base_util.git  
 
+    # 缓存 Cargo registry
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    # 缓存 target
+    - name: Cache target
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-build-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+
+
+    - name: Build with proxy
+      run: |
+        cd /home/x1_rust_util
+        . /home/esp-idf/export.sh
+        just build_esp
+
     - name: Debug repo status
       run: |
         cd /home
         mkdir -p YiControl/components
         cp -r x1_rust_util YiControl/components/
         cp -r x1_base_util YiControl/components/
-        cd /home/YiControl/components/x1_rust_util
-        just build_esp
+        
+    
 
     - name: edit Project Env
       shell: sh -e {0}
