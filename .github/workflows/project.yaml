@@ -5,126 +5,253 @@ on:
     branches: ["master"]
   pull_request:
     branches: ["master"]
+
+env:
+  gituser: "Potato"
+  projectname: "YiControl"
+
 jobs:
-  Explore-GitHub-Actions:
+
+  yicontrol_build:
     runs-on: self-hosted
     container:
-      image: x1_new_build:latest
-      options: "--privileged -v /dev:/dev"
+      image: rainbow12/x1_build:1.0.1 
     steps:
-    - name: Install Node (for act)
+    
+    - name: Clone YiControlPE repository
+      run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
+
+    - name: Clone x1_base_util repository
+      run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/x1_base_util.git ./YiControl/components/x1_base_util
+    
+    - name: Clone x1_rust_util repository
+      run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/x1_rust_util.git ./YiControl/components/x1_rust_util
+    
+    - name: build x1_rust_util
       run: |
-        apt-get update && apt-get install -y nodejs npm
-
-
-
-    - name: Clone Gitea repo
-      run: |
-        cd /home
-        git clone https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/YiControl.git
-        git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_rust_util.git
-        git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_base_util.git  
-
-    # 缓存 Cargo registry
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: ${{ runner.os }}-cargo-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    # 缓存 target
-    - name: Cache target
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-build-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-build-
-
-
-    - name: Build with proxy
-      run: |
-        cd /home/x1_rust_util
-        . /home/esp-idf/export.sh
+        cd YiControl/components/x1_rust_util
         just build_esp
+      shell: bash
 
-    - name: Debug repo status
+    - name: Download resources.h
       run: |
-        cd /home
-        mkdir -p YiControl/components
-        cp -r x1_rust_util YiControl/components/
-        cp -r x1_base_util YiControl/components/
+        mkdir YiControl/build
+        cd YiControl/build
+        url http://${{secrets.FTP_HOST}}:1234/resources.h -o resources.h
+      shell: bash
+
+    - name: Build project
+      env:
+        IDF_TARGET: esp32s3
+      run: |
+        . $IDF_PATH/export.sh
+        cd YiControl
+        idf.py build
+      shell: bash
+
+    # - name: rename build folder
+    #   run: |
+    #     rm -rf YiControlPE/build/esp-idf
+    #     BUILD_DIR="build_$(date +%m%d%H%M)"
+    #     echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
+        
+
+    # - name: Upload ftp
+    #   uses: sebastianpopp/ftp-action@releases/v2
+    #   with:
+    #     host: ${{secrets.FTP_HOST}}
+    #     user: ${{secrets.FTP_USER}}
+    #     password: ${{secrets.FTP_PASS}}
+    #     localDir: "YiControlPE/build"
+    #     remoteDir: "/AiYiJan/YiControlPEBin/${{ env.BUILD_DIR }}"
+      
+
+
+
+
+# name: ESP32-S3 (esp-rs no-std)
+
+# on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+
+# env:
+#   gituser: "Potato"
+#   projectname: "x1_rust_util"
+#   projectuiname: "YiControlPE_UI"
+
+# jobs:
+#   build-esp32s3:
+#     runs-on: self-hosted
+#     container:
+#       image: espressif/idf:v5.2.5
+#     steps:
+#       - name: Install git
+#         run: |
+#           apt-get update && apt-get install -y git
+#           rm -rf x1_rust_util
+      
+#       - name: Clone YiControlPE repository
+#         run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
+
+#       # 1. 安装 esp-rs 官方工具链（2025 年最新版，已经完美支持 S3）
+#       - name: Install esp-rs toolchain
+#         uses: esp-rs/xtensa-toolchain@v1.5
+#         with:
+#           # 只装 S3 需要的目标，速度更快
+#           target: esp32s3
+#           default: true
+#           # 可选：同时安装 cargo-espflash、espflash 等工具
+#           tools: cargo-espflash,espflash,ldproxy
+
+#       # 2. 缓存 Cargo 依赖（超级省时间）
+#       - name: Cache cargo registry & git deps
+#         uses: actions/cache@v4
+#         with:
+#           path: |
+#             ~/.cargo/registry
+#             ~/.cargo/git
+#             target
+#           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#           restore-keys: |
+#             ${{ runner.os }}-cargo-
+
+#       # 3. （可选）如果你项目用的是 https://github.com/esp-rs/esp-template
+#       #    这一步可以自动安装 std 补丁
+#       - name: Run esp-template setup (if you use it)
+#         if: contains(github.repository, 'esp-template') || hashFiles('esp-idf') == ''
+#         run: |
+#           cargo install esp-template
+#           esp-template setup || true   # 部分情况下会提示已经存在，忽略即可
+
+#       # 4. 编译 Release 版本（最常用）
+#       - name: Build Release (esp32s3)
+#         run: |
+#           cargo build --target esp32s3 --release
+
+
+
+# jobs:
+#   Explore-GitHub-Actions:
+#     runs-on: self-hosted
+#     container:
+#       image: x1_new_build:latest
+#       options: "--privileged -v /dev:/dev"
+#     steps:
+#     - name: Install Node (for act)
+#       run: |
+#         apt-get update && apt-get install -y nodejs npm
+
+
+
+#     - name: Clone Gitea repo
+#       run: |
+#         cd /home
+#         git clone https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/YiControl.git
+#         git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_rust_util.git
+#         git clone --depth 1 https://${{ secrets.GITEA_TOKEN }}@git.zapotato.com/Potato/x1_base_util.git  
+
+#     # 缓存 Cargo registry
+#     - name: Cache cargo registry
+#       uses: actions/cache@v4
+#       with:
+#         path: |
+#           ~/.cargo/registry
+#           ~/.cargo/git
+#         key: ${{ runner.os }}-cargo-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
+#         restore-keys: |
+#           ${{ runner.os }}-cargo-
+
+#     # 缓存 target
+#     - name: Cache target
+#       uses: actions/cache@v4
+#       with:
+#         path: target
+#         key: ${{ runner.os }}-build-${{ hashFiles('/home/x1_rust_util/Cargo.lock') }}
+#         restore-keys: |
+#           ${{ runner.os }}-build-
+
+
+#     - name: Build with proxy
+#       run: |
+#         cd /home/x1_rust_util
+#         . /home/esp-idf/export.sh
+#         just build_esp
+
+#     - name: Debug repo status
+#       run: |
+#         cd /home
+#         mkdir -p YiControl/components
+#         cp -r x1_rust_util YiControl/components/
+#         cp -r x1_base_util YiControl/components/
         
     
 
-    - name: edit Project Env
-      shell: sh -e {0}
-      env:
-        IDF_TARGET: esp32s3
-        SDKCONFIG_DEFAULTS: sdkconfig.ci
-        FTP_USER: ${{ secrets.FTP_USER }}
-        FTP_PASS: ${{ secrets.FTP_PASS }}
-        FTP_HOST: ${{ secrets.FTP_HOST }}
-      run: |
-        cd /home/YiControl
-        . /home/esp-idf/export.sh
-        mkdir -p /home/YiControl/build
-        wget -r -nH --cut-dirs=4 -P /home/YiControl/build/ ftp://$FTP_USER:$FTP_PASS@$FTP_HOST/AiYiJan/YiControlStaticBin/Static/bin
-        idf.py build
+#     - name: edit Project Env
+#       shell: sh -e {0}
+#       env:
+#         IDF_TARGET: esp32s3
+#         SDKCONFIG_DEFAULTS: sdkconfig.ci
+#         FTP_USER: ${{ secrets.FTP_USER }}
+#         FTP_PASS: ${{ secrets.FTP_PASS }}
+#         FTP_HOST: ${{ secrets.FTP_HOST }}
+#       run: |
+#         cd /home/YiControl
+#         . /home/esp-idf/export.sh
+#         mkdir -p /home/YiControl/build
+#         wget -r -nH --cut-dirs=4 -P /home/YiControl/build/ ftp://$FTP_USER:$FTP_PASS@$FTP_HOST/AiYiJan/YiControlStaticBin/Static/bin
+#         idf.py build
 
 
 
 
-    - name: flash Project
-      run: |
-        cd /home/YiControl
-        . /home/esp-idf/export.sh
-        esptool --chip esp32s3  erase_flash
-        esptool --chip esp32s3 -b 460800 write_flash 0x420000 /home/YiControl/build/resources.bin
-        idf.py flash
+#     - name: flash Project
+#       run: |
+#         cd /home/YiControl
+#         . /home/esp-idf/export.sh
+#         esptool --chip esp32s3  erase_flash
+#         esptool --chip esp32s3 -b 460800 write_flash 0x420000 /home/YiControl/build/resources.bin
+#         idf.py flash
 
 
-    - name: mv Project bin file
-      run: |
-        mkdir -p /home/YiControlProjectBin
-        cp /home/YiControl/build/bootloader/bootloader.bin /home/YiControlProjectBin/
-        cp /home/YiControl/build/partition_table/partition-table.bin /home/YiControlProjectBin/
-        cp /home/YiControl/build/ota_data_initial.bin /home/YiControlProjectBin/
-        cp /home/YiControl/build/YiControl_*.bin /home/YiControlProjectBin/
-        cp /home/YiControl/build/storage.bin /home/YiControlProjectBin/
-        cp /home/YiControl/build/resources.bin /home/YiControlProjectBin/
+#     - name: mv Project bin file
+#       run: |
+#         mkdir -p /home/YiControlProjectBin
+#         cp /home/YiControl/build/bootloader/bootloader.bin /home/YiControlProjectBin/
+#         cp /home/YiControl/build/partition_table/partition-table.bin /home/YiControlProjectBin/
+#         cp /home/YiControl/build/ota_data_initial.bin /home/YiControlProjectBin/
+#         cp /home/YiControl/build/YiControl_*.bin /home/YiControlProjectBin/
+#         cp /home/YiControl/build/storage.bin /home/YiControlProjectBin/
+#         cp /home/YiControl/build/resources.bin /home/YiControlProjectBin/
 
-    - name: Upload bin files to FTP server
-      env:
-        FTP_USER: ${{ secrets.FTP_USER }}
-        FTP_PASS: ${{ secrets.FTP_PASS }}
-        FTP_HOST: ${{ secrets.FTP_HOST }}
-      run: |
+#     - name: Upload bin files to FTP server
+#       env:
+#         FTP_USER: ${{ secrets.FTP_USER }}
+#         FTP_PASS: ${{ secrets.FTP_PASS }}
+#         FTP_HOST: ${{ secrets.FTP_HOST }}
+#       run: |
 
-        cd /home
+#         cd /home
         
-        # 提取版本号和生成日期时间
-        VERSION=$(ls /home/YiControlProjectBin/YiControl_*.bin | head -1 | sed 's/.*YiControl_\(.*\)\.bin/\1/')
-        DATETIME=$(date +%m%d%H%M)
-        NEW_FOLDER_NAME="${VERSION}_${DATETIME}"
+#         # 提取版本号和生成日期时间
+#         VERSION=$(ls /home/YiControlProjectBin/YiControl_*.bin | head -1 | sed 's/.*YiControl_\(.*\)\.bin/\1/')
+#         DATETIME=$(date +%m%d%H%M)
+#         NEW_FOLDER_NAME="${VERSION}_${DATETIME}"
         
-        # 重命名文件夹
-        mv YiControlProjectBin "$NEW_FOLDER_NAME"
-        ls -la "$NEW_FOLDER_NAME"
+#         # 重命名文件夹
+#         mv YiControlProjectBin "$NEW_FOLDER_NAME"
+#         ls -la "$NEW_FOLDER_NAME"
         
-        # 上传整个文件夹到FTP服务器
-        lftp -c "
-          set ftp:ssl-allow no;
-          open -u $FTP_USER,$FTP_PASS $FTP_HOST;
-          mkdir -p AiYiJan/YiControlProjectBin;
-          cd AiYiJan/YiControlProjectBin;
-          mirror -R $NEW_FOLDER_NAME $NEW_FOLDER_NAME;
-          quit
-        "
+#         # 上传整个文件夹到FTP服务器
+#         lftp -c "
+#           set ftp:ssl-allow no;
+#           open -u $FTP_USER,$FTP_PASS $FTP_HOST;
+#           mkdir -p AiYiJan/YiControlProjectBin;
+#           cd AiYiJan/YiControlProjectBin;
+#           mirror -R $NEW_FOLDER_NAME $NEW_FOLDER_NAME;
+#           quit
+#         "
     
 
     
