@@ -17,8 +17,8 @@ jobs:
     container:
       image: rainbow12/x1_build:1.0.1 
     steps:
-    
-    - name: Clone YiControlPE repository
+
+    - name: Clone YiControl repository
       run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
 
     - name: Clone x1_base_util repository
@@ -26,14 +26,13 @@ jobs:
     
     - name: Clone x1_rust_util repository
       run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/x1_rust_util.git ./YiControl/components/x1_rust_util
-    
+
     - name: Download resources.h
       run: |
         mkdir YiControl/build
         cd YiControl/build
-        url http://${{secrets.FTP_HOST}}:1234/resources.h -o resources.h
+        curl http://${{ secrets.FTP_HOST }}:1234/resources.h -o resources.h
       shell: bash
-
 
     - name: build x1_rust_util
       run: |
