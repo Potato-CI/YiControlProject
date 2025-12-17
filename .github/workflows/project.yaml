@@ -18,6 +18,9 @@ jobs:
       image: rainbow12/x1_build:1.0.1 
     steps:
 
+    - name: clean Project
+      run: rm -rf ${{ env.projectname }}
+
     - name: Clone YiControl repository
       run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
 
