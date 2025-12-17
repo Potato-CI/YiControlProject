@@ -49,6 +49,7 @@ jobs:
         IDF_TARGET: esp32s3
         SDKCONFIG_DEFAULTS: sdkconfig.ci
       run: |
+        python3 $IDF_PATH/tools/idf_tools.py install
         . $IDF_PATH/export.sh
         cd YiControl
         idf.py build
