@@ -25,7 +25,7 @@ jobs:
       run: apt install -y libclang-dev clang
 
     - name: install venv
-      run: espup help
+      run: su root
 
     - name: Clone YiControl repository
       run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
@@ -48,12 +48,6 @@ jobs:
         cd YiControl/components/x1_rust_util
         just build_esp
       shell: bash
-
-    - name: Setup Xtensa Rust Toolchain
-      uses: esp-rs/xtensa-toolchain@v1.6
-      with:
-        target: xtensa-esp32s3-espidf
-        default: true
 
     - name: Build project
       env:
