@@ -21,6 +21,9 @@ jobs:
     - name: clean Project
       run: rm -rf ${{ env.projectname }}
 
+    - name: install lib
+      run: apt install -y libclang-dev clang
+
     - name: Clone YiControl repository
       run: git clone ${{ secrets.GITEA_HOST }}/${{ env.gituser }}/${{ env.projectname }}.git
 
