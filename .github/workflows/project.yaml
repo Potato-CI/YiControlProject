@@ -49,6 +49,11 @@ jobs:
         just build_esp
       shell: bash
 
+    - name: Setup Xtensa Rust Toolchain
+      uses: esp-rs/xtensa-toolchain@v1.6
+      with:
+        target: xtensa-esp32s3-espidf
+        default: true
 
     - name: Build project
       env:
